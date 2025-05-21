@@ -1,3 +1,9 @@
+// Do node
+import * as readline from 'node:readline/promises';
+import { createInterface } from 'node:readline';
+import { stdin, stdout } from 'node:process';
+
+
 import CPU from "./src/cpu.js";
 import {createMemory} from "./src/create-memory.js";
 import { instructions } from "./src/instructions.js";
@@ -12,14 +18,14 @@ const R2 = 3;
 
 let i = 0;
 
+writebleBytes[i++] = instructions.MOV_MEM_REG;
+writebleBytes[i++] = 0x01;
+writebleBytes[i++] = 0x00;
+writebleBytes[i++] = R1;
+
 writebleBytes[i++] = instructions.MOV_LIT_REG;
 writebleBytes[i++] = 0x00;
 writebleBytes[i++] = 0x01;
-writebleBytes[i++] = R1;
-
-writebleBytes[i++] =  instructions.MOV_LIT_REG;
-writebleBytes[i++] = 0x00;
-writebleBytes[i++] = 0x0A;
 writebleBytes[i++] = R2;
 
 writebleBytes[i++] = instructions.ADD_REG_REG;
@@ -28,37 +34,33 @@ writebleBytes[i++] = R2;
 
 writebleBytes[i++] = instructions.MOV_REG_MEM;
 writebleBytes[i++] = ACC;  
-// coloca o valor no final do programa 
-// endereco 0x0100
 writebleBytes[i++] = 0x01;
 writebleBytes[i++] = 0x00; 
 
+writebleBytes[i++] = instructions.JMP_NOT_EQ;
+writebleBytes[i++] = 0x00; 
+writebleBytes[i++] = 0x03;
+
+writebleBytes[i++] = 0x00;
+writebleBytes[i++] = 0x00;
+
 const cpu = new CPU(memory);
 
-cpu.debug();
 cpu.viewMemoryAt(cpu.getRegister("ip"));
-cpu.viewMemoryAt(0x0100);
-console.log(" ")
-cpu.step();
+cpu.debug();
+// cpu.viewMemoryAt(0x0100);
 
-cpu.debug();
-cpu.viewMemoryAt(cpu.getRegister("ip"));
-cpu.viewMemoryAt(0x0100);
-console.log(" ")
-cpu.step();
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+})
 
-cpu.debug();
-cpu.viewMemoryAt(cpu.getRegister("ip"));
-cpu.viewMemoryAt(0x0100);
-console.log(" ")
-cpu.step();
+rl.on("line", () => {
 
-cpu.debug();
-cpu.viewMemoryAt(cpu.getRegister("ip"));
-cpu.viewMemoryAt(0x0100);
-cpu.step();
+    cpu.step();
+    cpu.viewMemoryAt(cpu.getRegister("ip"));
+    cpu.debug();
+    // cpu.viewMemoryAt(0x0100);
+    console.log(" ");
 
-cpu.debug();
-cpu.viewMemoryAt(cpu.getRegister("ip"));
-cpu.viewMemoryAt(0x0100);
-cpu.step();
+})

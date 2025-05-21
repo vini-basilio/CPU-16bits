@@ -1,4 +1,4 @@
-import { instructions } from "./instructions.js";
+import { hexToAssembly, instructions } from "./instructions.js";
 import {createMemory} from "./create-memory.js";
 
 class CPU {
@@ -8,10 +8,9 @@ class CPU {
         this.registersNames =
         [
            "ip", "acc", 
-           "r1", "r2",
-           "r3","r4",
-           "r5", "r6", 
-           "r7","r8",
+           "r1", "r2", "r3","r4", 
+           "r5", "r6", "r7","r8",
+           "sp","fp"
         ]
 
         // cria uma memoria de 16 bits para cada reg que será todos os reg que temos
@@ -41,9 +40,43 @@ class CPU {
 
             const nextEightBytes = Array.from({length: 8}, 
                 (_, i) => this.memory.getUint8(address + i))
-                .map( v => `0x${v.toString(16).padStart(2,'0')}`);
+                .map( v => v.toString(16).padStart(4, '0x'));
 
-        console.log(`0x${address.toString(16).padStart(4, '0')}: ${nextEightBytes.join(' ')}`); 
+            let encoded = this.memory.getUint8(address);
+            const decoded = hexToAssembly.get(encoded.toString(16).padStart(4, '0x'))
+
+            switch(decoded){
+                case "MOV_LIT_REG": {
+                    address += 1;
+                    const value = this.memory.getUint16(address);
+                    address += 2
+                    const reg = this.memory.getUint8(address);
+                    console.log(`
+                    OP: MOV LIT REG 
+                    LIT: ${value.toString(16)} 
+                    REG ${this.registersNames[reg.toString(16) % this.registersNames.length]}
+                    `)
+                    break;
+                }
+                case "MOV_MEM_REG": {
+                    address += 1;
+                    const value = this.memory.getUint16(address);
+                    address += 2
+                    const reg = this.memory.getUint8(address);
+                    console.log(`
+                    OP: MOV MEM REG 
+                    VALUE FROM ADDR: ${value.toString(16).padStart(4, '0x')} 
+                    REG ${this.registersNames[reg.toString(16) % this.registersNames.length]}
+                    `)
+                    break;
+                }
+                default: {
+                    
+                }
+
+            }
+
+        // console.log(`0x${address.toString(16).padStart(4, '0')}: ${nextEightBytes.join(' ')}`); 
     }
 
     getRegister(name){
@@ -129,6 +162,15 @@ class CPU {
                 const reg1 = this.registers.getUint16(r1 * 2);
                 const reg2 = this.registers.getUint16(r2 * 2);
                 this.setRegister("acc", reg1 + reg2);
+                break;
+            }
+            case instructions.JMP_NOT_EQ: {
+                const value = this.fetch16();
+                const address = this.fetch16();
+
+                if(value != this.getRegister("acc")){
+                    this.setRegister("ip", address);
+                }
                 break;
             }
         }
