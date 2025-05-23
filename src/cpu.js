@@ -1,16 +1,18 @@
 import { hexToAssembly, instructions } from "./instructions.js";
 import {createMemory} from "./create-memory.js";
+import { brotliCompressSync } from "node:zlib";
 
 class CPU {
     constructor(memory){
         this.memory = memory;
 
+        // Registradores publicos
         this.registersNames =
         [
            "ip", "acc", 
            "r1", "r2", "r3","r4", 
            "r5", "r6", "r7","r8",
-           "sp","fp"
+           "sp","fp",
         ]
 
         // cria uma memoria de 16 bits para cada reg que será todos os reg que temos
@@ -23,6 +25,17 @@ class CPU {
             }, {}
         );
 
+        // -1 para tirarmos um byte
+        // e -1 porque queremos um index e nao o tamanho
+        this.setRegister("sp", 0xffff - 1);
+        this.setRegister("fp", 0xffff - 1);
+
+
+
+        //Registradores privados
+        this.stackFrameSize = 0;
+
+
     }
     debug(){
         this.registersNames.forEach(name => {
@@ -32,16 +45,21 @@ class CPU {
     }
 
     // para debug tambem
-    viewMemoryAt(address){
+    viewMemoryAt(address, n = 8){
         /* 
             As vezes nossa CPU lida com os dados como 2 bytes
             As vezes como 16 bit, uma palavra 
         */
 
-            const nextEightBytes = Array.from({length: 8}, 
+            const nextNtBytes = Array.from({length: n}, 
                 (_, i) => this.memory.getUint8(address + i))
                 .map( v => v.toString(16).padStart(4, '0x'));
 
+        console.log(`         Current address: 0x${address.toString(16).padStart(4, '0')}
+         Content: ${nextNtBytes.join(' ')}`); 
+    }
+    assembly(address){
+     
             let encoded = this.memory.getUint8(address);
             const decoded = hexToAssembly.get(encoded.toString(16).padStart(4, '0x'))
 
@@ -75,10 +93,8 @@ class CPU {
                 }
 
             }
-
-        // console.log(`0x${address.toString(16).padStart(4, '0')}: ${nextEightBytes.join(' ')}`); 
     }
-
+    // OP com REG
     getRegister(name){
         if(!(name in this.registersMap)){
             throw new Error(`getRegister: No such register '${name}'`)
@@ -91,6 +107,7 @@ class CPU {
         }
         return this.registers.setUint16(this.registersMap[name], value);
     }
+    // OP de busca
     fetch(){
         const nextInstructionAddress = this.getRegister("ip");
         const instruction = this.memory.getUint8(nextInstructionAddress);
@@ -103,6 +120,66 @@ class CPU {
         this.setRegister("ip", nextInstructionAddress + 2);
         return instruction;
     }
+    fetchRegisterIndex(){
+        return (this.fetch() % this.registersNames.length) * 2;
+    }
+
+    //OP da Stacks
+    //Mover o ponteiro
+    push(value){
+        const spAddress = this.getRegister("sp");
+        this.memory.setUint16(spAddress, value);
+        this.setRegister("sp", spAddress - 2);
+        this.stackFrameSize += 2;
+    }
+
+    pop(){
+        const nextSpAddress = this.getRegister("sp") + 2;
+        this.setRegister("sp", nextSpAddress);
+        this.stackFrameSize -= 2;
+        return this.memory.getUint16(nextSpAddress);
+    }
+    // Salvar o estado do processador para subrotinas
+    pushState(){
+        // Atualiza a stack com o que estava nos registradores
+        // Como a stack fica na RAM, estamos salvando um estado
+        // Isso não é o mesmo que salvar o Contexto
+        for(let i = 2; i < 10; i++){
+            // console.log(this.registersNames[i])
+            this.push(this.getRegister(this.registersNames[i]));
+
+        }
+        this.push(this.getRegister("ip"));
+        this.push(this.stackFrameSize + 2);
+
+        this.setRegister("fp", this.getRegister("sp"));
+        this.stackFrameSize = 0;
+    }
+    popState() {
+        const framePointerAddress = this.getRegister('fp');
+        this.setRegister('sp', framePointerAddress);
+    
+        this.stackFrameSize = this.pop();
+        const stackFrameSize = this.stackFrameSize;
+    
+        this.setRegister('ip', this.pop());
+        this.setRegister('r8', this.pop());
+        this.setRegister('r7', this.pop());
+        this.setRegister('r6', this.pop());
+        this.setRegister('r5', this.pop());
+        this.setRegister('r4', this.pop());
+        this.setRegister('r3', this.pop());
+        this.setRegister('r2', this.pop());
+        this.setRegister('r1', this.pop());
+    
+        const nArgs = this.pop();
+        for (let i = 0; i < nArgs; i++) {
+          this.pop();
+        }
+    
+        this.setRegister('fp', framePointerAddress + stackFrameSize);
+      }
+
 
     execute(instruction){
         switch(instruction){
@@ -128,21 +205,21 @@ class CPU {
              */
             case instructions.MOV_LIT_REG: {
                 const literal = this.fetch16();
-                const register = (this.fetch() % this.registersNames.length) * 2;
+                const register = this.fetchRegisterIndex();
                 this.registers.setUint16(register, literal);
                 break;
             }
             // move um valor de um registrador para outro registrador
             case instructions.MOV_REG_REG: {
-                const registerFrom = (this.fetch() % this.registersNames.length) * 2;
-                const registerTo = (this.fetch() % this.registersNames.length) * 2;
+                const registerFrom = this.fetchRegisterIndex();
+                const registerTo = this.fetchRegisterIndex();
                 const value = this.registers.getUint16(registerFrom);
                 this.register.setUint16(registerTo, value);
                 break;
             }
             
             case instructions.MOV_REG_MEM: {
-                const registerFrom = (this.fetch() % this.registersNames.length) * 2;
+                const registerFrom = this.fetchRegisterIndex();
                 const address = this.fetch16();
                 const value = this.registers.getUint16(registerFrom);
                 this.memory.setUint16(address, value);
@@ -150,7 +227,7 @@ class CPU {
             }
             case instructions.MOV_MEM_REG: {
                 const address = this.fetch16();
-                const registerTo = (this.fetch() % this.registersNames.length) * 2;
+                const registerTo = this.fetchRegisterIndex();
                 const value = this.memory.getUint16(address);
                 this.registers.setUint16(registerTo, value);
                 break;
@@ -159,8 +236,8 @@ class CPU {
                 const r1 = this.fetch();
                 const r2 = this.fetch();
 
-                const reg1 = this.registers.getUint16(r1 * 2);
-                const reg2 = this.registers.getUint16(r2 * 2);
+                const reg1 = this.registers.getUint16(r1);
+                const reg2 = this.registers.getUint16(r2);
                 this.setRegister("acc", reg1 + reg2);
                 break;
             }
@@ -173,13 +250,57 @@ class CPU {
                 }
                 break;
             }
+            case instructions.PSH_LIT: {
+                const value = this.fetch16();
+                this.push(value);
+                break;
+            }
+            case instructions.PSH_REG: {
+                const registerIndex = this.fetchRegisterIndex();
+                this.push(this.registers.getUint16(registerIndex));
+                break;
+            }
+            case instructions.POP: {
+                const registerIndex = this.fetchRegisterIndex();
+                const value = this.pop()
+                this.registers.setUint16(registerIndex, value);
+                break;
+            }
+            case instructions.CAL_LIT: {
+                const address = this.fetch16();
+                this.pushState();
+                //Pula o instrution pointer para o endereco da subrotina
+                this.setRegister("ip", address);
+                break;
+            }
+            case instructions.CAL_REG: {
+                const registsIndex = this.fetchRegisterIndex();
+                const address = this.registers.getInt16(registsIndex);
+                this.pushState();
+                //Pula o instrution pointer para o endereco da subrotina
+                this.setRegister("ip", address);
+                break;
+            }
+            case instructions.RET: {
+                this.popState();
+                break;
+            }
+            case instructions.HLT:{
+                return true;
+            }
+        
         }
     }
     step(){
         const instruction = this.fetch();
         return this.execute(instruction);
     }
-
+    run(){
+        const halt = this.step();
+        if(!halt) {
+            setImmediate(() => this.run());
+        }
+    }
 
 }
 
