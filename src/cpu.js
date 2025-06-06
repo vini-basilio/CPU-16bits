@@ -1,6 +1,5 @@
-import {hexToAssembly, instructions} from "./instructions.js";
 import {createMemory} from "./create-memory.js";
-import {brotliCompressSync} from "node:zlib";
+import {instructions} from "./instructions.js";
 
 class CPU {
     constructor(memory) {
@@ -35,13 +34,6 @@ class CPU {
         this.stackFrameSize = 0;
 
 
-    }
-
-    debug() {
-        this.registersNames.forEach(name => {
-            console.log(`${name}: ${this.getRegister(name).toString(16).padStart(4, 0)}`);
-        });
-        console.log(" ");
     }
 
     // para debug tambem
@@ -206,7 +198,7 @@ class CPU {
             case instructions.MOV_LIT_MEM: {
                 const value = this.fetch16();
                 const address = this.fetch16();
-                this.memory.setUint16(value);
+                this.memory.setUint16(address, value);
                 break;
             }
             // Ponteiro de registrador
@@ -272,7 +264,7 @@ class CPU {
                 const literal = this.fetch16();
                 const r1 = this.fetchRegisterIndex();
                 const registerValue = this.registers.getUint16(r1);
-                this.setRegister("acc", registerValue * r1);
+                this.setRegister("acc", registerValue * literal);
                 break;
             }
             case instructions.MUL_REG_REG: {
