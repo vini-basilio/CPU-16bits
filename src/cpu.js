@@ -291,6 +291,115 @@ class CPU {
                 this.registers.setUint16(r1, newValue);
                 break;
             }
+            case instructions.LSF_REG_LIT: {
+                const r1 = this.fetchRegisterIndex();
+                const literal = this.fetch();
+                const registerValue = this.registers.getUint16(r1);
+                const res = registerValue << literal;
+                this.registers.setUint16(r1, res);
+                break;
+            }
+            case instructions.LSF_REG_REG: {
+                const r1 = this.fetchRegisterIndex();
+                const r2 = this.fetchRegisterIndex();
+
+                const registerValue = this.registers.getUint16(r1);
+                const shiftBy = this.registers.getUint16(r2);
+                const res = registerValue << shiftBy;
+
+                this.registers.setUint16(r1, res);
+                break;
+            }
+            case instructions.RSF_REG_LIT: {
+                const r1 = this.fetchRegisterIndex();
+                const literal = this.fetch();
+                const registerValue = this.registers.getUint16(r1);
+                const res = registerValue >> literal;
+                this.registers.setUint16(r1, res);
+                break;
+            }
+            case instructions.RSF_REG_REG: {
+                const r1 = this.fetchRegisterIndex();
+                const r2 = this.fetchRegisterIndex();
+
+                const registerValue = this.registers.getUint16(r1);
+                const shiftBy = this.registers.getUint16(r2);
+                const res = registerValue >> shiftBy;
+
+                this.registers.setUint16(r1, res);
+                break;
+            }
+            case instructions.AND_REG_LIT: {
+                const r1 = this.fetchRegisterIndex();
+                const literal = this.fetch16();
+                const registerValue = this.registers.getUint16(r1);
+
+                const res = registerValue & literal;
+                this.setRegister("acc", res);
+                break;
+            }
+            case instructions.AND_REG_REG: {
+                const r1 = this.fetchRegisterIndex();
+                const r2 = this.fetchRegisterIndex();
+
+                const reg1 = this.registers.getUint16(r1);
+                const reg2 = this.registers.getUint16(r2);
+
+                const res = reg1 & reg2;
+                this.setRegister("acc", res);
+                break;
+            }
+            case instructions.OR_REG_LIT: {
+                const r1 = this.fetchRegisterIndex();
+                const literal = this.fetch16();
+                const registerValue = this.registers.getUint16(r1);
+
+                const res = registerValue | literal;
+                this.setRegister("acc", res);
+                break;
+            }
+            case instructions.OR_REG_REG: {
+                const r1 = this.fetchRegisterIndex();
+                const r2 = this.fetchRegisterIndex();
+
+                const reg1 = this.registers.getUint16(r1);
+                const reg2 = this.registers.getUint16(r2);
+
+                const res = reg1 | reg2;
+                this.setRegister("acc", res);
+                break;
+            }
+            case instructions.OR_REG_LIT: {
+                const r1 = this.fetchRegisterIndex();
+                const literal = this.fetch16();
+                const registerValue = this.registers.getUint16(r1);
+
+                const res = registerValue ^ literal;
+                this.setRegister("acc", res);
+                break;
+            }
+            case instructions.OR_REG_REG: {
+                const r1 = this.fetchRegisterIndex();
+                const r2 = this.fetchRegisterIndex();
+
+                const reg1 = this.registers.getUint16(r1);
+                const reg2 = this.registers.getUint16(r2);
+
+                const res = reg1 ^ reg2;
+                this.setRegister("acc", res);
+                break;
+            }
+            case instructions.NOT: {
+                const r1 = this.fetchRegisterIndex();
+
+                const registerValue = this.registers.getUint16(r1);
+                // Pequeno problema aqui: JS trabalha com 32 bit por padrao,
+                // O not ira pegar todos os bits nao usados, porque so usamos 16
+                // e flipar tambem. Entao, vamos apenas filtra-los
+                const res = (~registerValue) & 0xFFFF;
+                this.setRegister("acc", res);
+                break;
+            }
             case instructions.JMP_NOT_EQ: {
                 const value = this.fetch16();
                 const address = this.fetch16();
